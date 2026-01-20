@@ -1,22 +1,17 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { RotateCcw, Volume2, VolumeX, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameCanvas } from "@/components/game-canvas";
-import { UploadZone } from "@/components/upload-zone";
-import { GameStats } from "@/components/game-stats";
-import { Leaderboard } from "@/components/leaderboard";
 import { HighScoreModal } from "@/components/high-score-modal";
 import { isHighScore, type LeaderboardEntry } from "@/lib/leaderboard";
 import type { LevelData, GameState, GameEvent } from "@/game/types";
 
 export default function Home() {
   const [levelData, setLevelData] = useState<LevelData | null>(null);
-  const [gameState, setGameState] = useState<GameState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [eventsCount, setEventsCount] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Audio state
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -24,10 +19,6 @@ export default function Home() {
   // High score modal
   const [showHighScore, setShowHighScore] = useState(false);
   const [finalScore, setFinalScore] = useState({ score: 0, blocks: 0, combo: 0 });
-  const [highlightEntryId, setHighlightEntryId] = useState<string | undefined>();
-
-  // Leaderboard refresh key
-  const [leaderboardKey, setLeaderboardKey] = useState(0);
 
   // Initialize audio
   useEffect(() => {
@@ -38,7 +29,12 @@ export default function Home() {
     initAudio();
   }, [soundEnabled]);
 
-  const handleFileSelect = useCallback(async (file: File) => {
+  const processFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file");
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -46,9 +42,6 @@ export default function Home() {
       const { generateLevel } = await import("@/game/engine/level-generator");
 
       const analysis = await analyzeCalendar(file, false);
-      setEventsCount(analysis.events.length);
-
-      // Generate level using actual image dimensions (no forced size)
       const level = generateLevel(analysis);
 
       setLevelData(level);
@@ -60,8 +53,30 @@ export default function Home() {
     }
   }, []);
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
   const handleGameEvent = useCallback(async (event: GameEvent) => {
-    // Play sounds
     const { audioManager } = await import("@/game/engine/audio");
 
     switch (event.type) {
@@ -84,9 +99,6 @@ export default function Home() {
   }, []);
 
   const handleStateChange = useCallback((state: GameState) => {
-    setGameState(state);
-
-    // Check for game end and high score
     if (state.status === "won" || state.status === "lost") {
       if (isHighScore(state.score) && state.score > 0) {
         setFinalScore({
@@ -101,14 +113,6 @@ export default function Home() {
 
   const handleReset = useCallback(() => {
     setLevelData(null);
-    setGameState(null);
-    setEventsCount(0);
-    setHighlightEntryId(undefined);
-  }, []);
-
-  const handleHighScoreSaved = useCallback((entry: LeaderboardEntry) => {
-    setHighlightEntryId(entry.id);
-    setLeaderboardKey((k) => k + 1);
   }, []);
 
   const toggleSound = useCallback(async () => {
@@ -119,19 +123,14 @@ export default function Home() {
   }, [soundEnabled]);
 
   return (
-    <main className="min-h-screen bg-grid">
-      {/* Header */}
+    <main className="min-h-screen bg-grid flex flex-col">
+      {/* Minimal Header */}
       <header className="border-b border-white/10 bg-black/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-cyan-400 neon-text">
-                SMASH YOUR WEEK
-              </h1>
-              <p className="text-sm text-gray-400">
-                Breakout meets Calendar
-              </p>
-            </div>
+            <h1 className="text-xl font-bold text-cyan-400 neon-text">
+              SMASH YOUR WEEK
+            </h1>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -148,7 +147,7 @@ export default function Home() {
               {levelData && (
                 <Button variant="ghost" size="sm" onClick={handleReset}>
                   <RotateCcw className="h-4 w-4 mr-1" />
-                  New Game
+                  New
                 </Button>
               )}
             </div>
@@ -156,95 +155,76 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid lg:grid-cols-[1fr_300px] gap-6">
-          {/* Game Area */}
-          <div className="flex flex-col gap-4">
+      {/* Main Content - Single Centered Window */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        {!levelData ? (
+          /* Upload Zone */
+          <div
+            className={`
+              w-full max-w-2xl aspect-video
+              border-2 border-dashed rounded-xl
+              flex flex-col items-center justify-center gap-4
+              cursor-pointer transition-all
+              ${isDragging
+                ? "border-cyan-400 bg-cyan-400/10"
+                : "border-white/20 bg-black/30 hover:border-white/40 hover:bg-black/40"
+              }
+              ${isProcessing ? "pointer-events-none opacity-50" : ""}
+            `}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => document.getElementById("file-input")?.click()}
+          >
+            <input
+              id="file-input"
+              type="file"
+              accept="image/*"
+              onChange={handleFileInput}
+              className="hidden"
+            />
+
+            {isProcessing ? (
+              <>
+                <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <p className="text-gray-400">Analyzing calendar...</p>
+              </>
+            ) : (
+              <>
+                <Upload className={`w-16 h-16 ${isDragging ? "text-cyan-400" : "text-gray-500"}`} />
+                <div className="text-center">
+                  <p className="text-lg text-white">
+                    Drop your calendar screenshot here
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    or click to browse
+                  </p>
+                </div>
+                <div className="flex gap-6 mt-4 text-xs text-gray-600">
+                  <span>Google Calendar</span>
+                  <span>Outlook</span>
+                  <span>Apple Calendar</span>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          /* Game Canvas */
+          <div className="flex flex-col items-center gap-3">
             <GameCanvas
               levelData={levelData}
               onGameEvent={handleGameEvent}
               onStateChange={handleStateChange}
-              className="w-full aspect-[4/3] bg-black/50 rounded-xl border border-white/10"
+              className="rounded-xl border border-white/10 shadow-2xl"
             />
-
-            {/* Controls hint */}
-            <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-500">
-              <span>
-                <kbd className="px-2 py-1 bg-white/10 rounded text-xs">Mouse</kbd>{" "}
-                Move paddle
-              </span>
-              <span>
-                <kbd className="px-2 py-1 bg-white/10 rounded text-xs">Space</kbd>{" "}
-                Launch / Restart
-              </span>
-              <span>
-                <kbd className="px-2 py-1 bg-white/10 rounded text-xs">P</kbd>{" "}
-                Pause
-              </span>
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">Mouse</kbd> Move</span>
+              <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">Space</kbd> Launch</span>
+              <span><kbd className="px-1.5 py-0.5 bg-white/10 rounded">P</kbd> Pause</span>
             </div>
           </div>
-
-          {/* Sidebar */}
-          <div className="flex flex-col gap-4">
-            {/* Upload Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Upload Calendar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <UploadZone
-                  onFileSelect={handleFileSelect}
-                  isProcessing={isProcessing}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Stats Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Game Stats</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <GameStats state={gameState} />
-                {eventsCount > 0 && (
-                  <p className="text-xs text-gray-500 mt-3 text-center">
-                    {eventsCount} calendar events detected
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Leaderboard */}
-            <Leaderboard
-              key={leaderboardKey}
-              onHighlightEntry={highlightEntryId}
-            />
-
-            {/* Instructions Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">How to Play</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-gray-400 space-y-2">
-                <p>1. Upload a calendar screenshot</p>
-                <p>2. Events become breakout blocks</p>
-                <p>3. Destroy all blocks to win!</p>
-                <p className="text-cyan-400 mt-3">
-                  Build combos for bonus points
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* Footer */}
-      <footer className="border-t border-white/10 bg-black/30 mt-auto">
-        <div className="container mx-auto px-4 py-4 text-center text-sm text-gray-500">
-          Smash Your Week - A calendar breakout game
-        </div>
-      </footer>
 
       {/* High Score Modal */}
       <HighScoreModal
@@ -253,7 +233,7 @@ export default function Home() {
         blocksDestroyed={finalScore.blocks}
         maxCombo={finalScore.combo}
         onClose={() => setShowHighScore(false)}
-        onSaved={handleHighScoreSaved}
+        onSaved={() => {}}
       />
     </main>
   );
