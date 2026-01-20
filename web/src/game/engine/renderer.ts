@@ -210,8 +210,8 @@ export class GameRenderer {
 
     for (const block of blocks) {
       if (block.isDestroyed) {
-        // Draw a dark rectangle to hide the calendar event in the background
-        ctx.fillStyle = "#0a0a1a"; // Match background color
+        // Draw white/light rectangle to show calendar background
+        ctx.fillStyle = "#ffffff"; // Calendar background is typically white
         ctx.fillRect(
           block.x - 2,
           block.y - 2,
@@ -243,7 +243,7 @@ export class GameRenderer {
   }
 
   /**
-   * Render a single block with neon effect
+   * Render a single block showing the actual calendar content
    */
   private renderBlock(block: GameBlock): void {
     const ctx = this.ctx;
@@ -254,14 +254,35 @@ export class GameRenderer {
     // Glow effect
     if (this.config.enableGlow) {
       ctx.shadowColor = color;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 10;
     }
 
-    // Block background with slight transparency
-    ctx.fillStyle = color + "dd";
-    ctx.beginPath();
-    this.roundRect(x, y, width, height, 4);
-    ctx.fill();
+    // Draw the actual calendar image portion as the block content
+    if (this.backgroundImage) {
+      // Calculate source coordinates from the original image
+      const scaleX = this.backgroundImage.width / this.config.width;
+      const scaleY = this.backgroundImage.height / this.config.height;
+
+      const srcX = x * scaleX;
+      const srcY = y * scaleY;
+      const srcW = width * scaleX;
+      const srcH = height * scaleY;
+
+      // Clip to rounded rectangle
+      ctx.beginPath();
+      this.roundRect(x, y, width, height, 4);
+      ctx.clip();
+
+      // Draw the portion of the background image
+      ctx.drawImage(
+        this.backgroundImage,
+        srcX, srcY, srcW, srcH,  // Source rectangle
+        x, y, width, height      // Destination rectangle
+      );
+
+      ctx.restore();
+      ctx.save();
+    }
 
     // Health indicator (darker overlay for damaged blocks)
     if (block.health < block.maxHealth) {
@@ -275,37 +296,16 @@ export class GameRenderer {
       this.renderCracks(block, damageRatio);
     }
 
-    // Neon border
-    ctx.strokeStyle = this.lightenColor(color, 40);
+    // Neon border for interactivity feedback
+    if (this.config.enableGlow) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+    }
+    ctx.strokeStyle = this.lightenColor(color, 60);
     ctx.lineWidth = 2;
     ctx.beginPath();
     this.roundRect(x, y, width, height, 4);
     ctx.stroke();
-
-    // Inner highlight
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    this.roundRect(x + 2, y + 2, width - 4, height - 4, 3);
-    ctx.stroke();
-
-    // Text label
-    if (block.text && height > 15) {
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = this.getTextColor(color);
-      ctx.font = `bold ${Math.min(12, height - 6)}px "Segoe UI", Arial, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      // Truncate text if too long
-      const maxWidth = width - 10;
-      let displayText = block.text;
-      while (ctx.measureText(displayText).width > maxWidth && displayText.length > 3) {
-        displayText = displayText.slice(0, -4) + "...";
-      }
-
-      ctx.fillText(displayText, x + width / 2, y + height / 2);
-    }
 
     ctx.restore();
   }
