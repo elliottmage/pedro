@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Play, RotateCcw } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameCanvas } from "@/components/game-canvas";
 import { UploadZone } from "@/components/upload-zone";
 import { GameStats } from "@/components/game-stats";
+import { Leaderboard } from "@/components/leaderboard";
+import { HighScoreModal } from "@/components/high-score-modal";
+import { isHighScore, type LeaderboardEntry } from "@/lib/leaderboard";
 import type { LevelData, GameState, GameEvent } from "@/game/types";
 
 export default function Home() {
@@ -15,19 +18,36 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [eventsCount, setEventsCount] = useState(0);
 
+  // Audio state
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // High score modal
+  const [showHighScore, setShowHighScore] = useState(false);
+  const [finalScore, setFinalScore] = useState({ score: 0, blocks: 0, combo: 0 });
+  const [highlightEntryId, setHighlightEntryId] = useState<string | undefined>();
+
+  // Leaderboard refresh key
+  const [leaderboardKey, setLeaderboardKey] = useState(0);
+
+  // Initialize audio
+  useEffect(() => {
+    const initAudio = async () => {
+      const { audioManager } = await import("@/game/engine/audio");
+      audioManager.setEnabled(soundEnabled);
+    };
+    initAudio();
+  }, [soundEnabled]);
+
   const handleFileSelect = useCallback(async (file: File) => {
     setIsProcessing(true);
 
     try {
-      // Dynamic import to avoid SSR issues
       const { analyzeCalendar } = await import("@/lib/analysis/calendar-analyzer");
       const { generateLevel } = await import("@/game/engine/level-generator");
 
-      // Analyze the calendar screenshot
       const analysis = await analyzeCalendar(file, false);
       setEventsCount(analysis.events.length);
 
-      // Generate level from analysis
       const level = generateLevel(analysis, {
         width: 800,
         height: 600,
@@ -42,12 +62,43 @@ export default function Home() {
     }
   }, []);
 
-  const handleGameEvent = useCallback((event: GameEvent) => {
-    console.log("Game event:", event.type, event.data);
+  const handleGameEvent = useCallback(async (event: GameEvent) => {
+    // Play sounds
+    const { audioManager } = await import("@/game/engine/audio");
+
+    switch (event.type) {
+      case "blockDestroyed":
+        audioManager.play("block_destroy");
+        if ((event.data as { combo: number }).combo > 1) {
+          audioManager.playCombo((event.data as { combo: number }).combo);
+        }
+        break;
+      case "ballLost":
+        audioManager.play("ball_lost");
+        break;
+      case "gameWon":
+        audioManager.play("game_win");
+        break;
+      case "gameLost":
+        audioManager.play("game_over");
+        break;
+    }
   }, []);
 
   const handleStateChange = useCallback((state: GameState) => {
     setGameState(state);
+
+    // Check for game end and high score
+    if (state.status === "won" || state.status === "lost") {
+      if (isHighScore(state.score) && state.score > 0) {
+        setFinalScore({
+          score: state.score,
+          blocks: state.blocksDestroyed,
+          combo: state.maxCombo,
+        });
+        setShowHighScore(true);
+      }
+    }
   }, []);
 
   const handleDemoMode = useCallback(async () => {
@@ -69,7 +120,20 @@ export default function Home() {
     setLevelData(null);
     setGameState(null);
     setEventsCount(0);
+    setHighlightEntryId(undefined);
   }, []);
+
+  const handleHighScoreSaved = useCallback((entry: LeaderboardEntry) => {
+    setHighlightEntryId(entry.id);
+    setLeaderboardKey((k) => k + 1);
+  }, []);
+
+  const toggleSound = useCallback(async () => {
+    const newState = !soundEnabled;
+    setSoundEnabled(newState);
+    const { audioManager } = await import("@/game/engine/audio");
+    audioManager.setEnabled(newState);
+  }, [soundEnabled]);
 
   return (
     <main className="min-h-screen bg-grid">
@@ -86,6 +150,18 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSound}
+                title={soundEnabled ? "Mute" : "Unmute"}
+              >
+                {soundEnabled ? (
+                  <Volume2 className="h-5 w-5" />
+                ) : (
+                  <VolumeX className="h-5 w-5 text-gray-500" />
+                )}
+              </Button>
               {levelData && (
                 <Button variant="ghost" size="sm" onClick={handleReset}>
                   <RotateCcw className="h-4 w-4 mr-1" />
@@ -168,6 +244,12 @@ export default function Home() {
               </CardContent>
             </Card>
 
+            {/* Leaderboard */}
+            <Leaderboard
+              key={leaderboardKey}
+              onHighlightEntry={highlightEntryId}
+            />
+
             {/* Instructions Card */}
             <Card>
               <CardHeader className="pb-3">
@@ -192,6 +274,16 @@ export default function Home() {
           Smash Your Week - A calendar breakout game
         </div>
       </footer>
+
+      {/* High Score Modal */}
+      <HighScoreModal
+        isOpen={showHighScore}
+        score={finalScore.score}
+        blocksDestroyed={finalScore.blocks}
+        maxCombo={finalScore.combo}
+        onClose={() => setShowHighScore(false)}
+        onSaved={handleHighScoreSaved}
+      />
     </main>
   );
 }

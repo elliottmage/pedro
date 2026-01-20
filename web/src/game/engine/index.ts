@@ -37,6 +37,14 @@ export {
 // Particles and effects
 export { ParticleSystem, ScreenShake } from "./particles";
 
+// Power-ups
+export { PowerUpManager, POWERUP_CONFIG } from "./powerups";
+export type { PowerUp, PowerUpType, ActivePowerUp } from "./powerups";
+
+// Audio
+export { AudioManager, audioManager } from "./audio";
+export type { SoundType } from "./audio";
+
 // Types (re-export from types folder)
 export type {
   CalendarEvent,
