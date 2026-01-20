@@ -59,14 +59,16 @@ export class CalendarAnalyzer {
   private enableOCR: boolean;
 
   // Configuration
-  private readonly MIN_BLOCK_WIDTH_RATIO = 0.015; // Slightly smaller min width
-  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.004; // Much smaller min height to catch thin events
-  private readonly MAX_BLOCK_WIDTH_RATIO = 0.5;
-  private readonly MAX_BLOCK_HEIGHT_RATIO = 0.3;
-  private readonly SATURATION_THRESHOLD = 10; // Lower threshold to catch more colored blocks
-  private readonly BRIGHTNESS_THRESHOLD = 235; // Lower to catch slightly colored blocks
-  private readonly GREY_THRESHOLD = 20; // Max difference between R,G,B to be considered grey
-  private readonly HEADER_RATIO = 0.08; // Top 8% is header/dates area - skip it
+  private readonly MIN_BLOCK_WIDTH_RATIO = 0.02; // Min width (about 2% of image)
+  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.008; // Min height (about 0.8% of image)
+  private readonly MAX_BLOCK_WIDTH_RATIO = 0.4; // Max width (40% of image)
+  private readonly MAX_BLOCK_HEIGHT_RATIO = 0.25; // Max height (25% of image)
+  private readonly SATURATION_THRESHOLD = 12; // Minimum saturation for colored blocks
+  private readonly BRIGHTNESS_THRESHOLD = 230; // Max brightness (filter white)
+  private readonly GREY_THRESHOLD = 15; // Max R/G/B difference to be grey (stricter)
+  private readonly HEADER_RATIO = 0.10; // Top 10% is header/dates area - skip it
+  private readonly MIN_ASPECT_RATIO = 0.5; // Min width/height ratio (filter vertical lines)
+  private readonly MAX_ASPECT_RATIO = 20; // Max width/height ratio (filter horizontal lines)
 
   constructor(enableOCR: boolean = false) {
     this.canvas = document.createElement("canvas");
@@ -219,6 +221,7 @@ export class CalendarAnalyzer {
    * A colored block is: any rectangle with color that is NOT:
    * - A grey calendar grid line
    * - A white/near-white area
+   * - A very light/faded color
    */
   private isColoredPixel(r: number, g: number, b: number): boolean {
     // Check if pixel is grey (calendar grid lines have R ≈ G ≈ B)
@@ -229,22 +232,28 @@ export class CalendarAnalyzer {
     );
     const isGrey = maxDiff < this.GREY_THRESHOLD;
 
-    // Check if pixel is too bright (white/near-white background)
+    // Check brightness
     const brightness = (r + g + b) / 3;
-    const isWhite = brightness > this.BRIGHTNESS_THRESHOLD;
 
-    // Check if pixel is very light grey (calendar background)
-    const isLightGrey = isGrey && brightness > 200;
+    // Filter out white/near-white pixels (background)
+    if (brightness > this.BRIGHTNESS_THRESHOLD) return false;
 
-    // A colored pixel is one that:
-    // - Is NOT white/near-white
-    // - Is NOT a grey line (unless it's dark grey, which could be an event)
-    // - Has some color (not purely grey) OR is dark enough to be an event
+    // Filter out light grey pixels (calendar grid, background)
+    if (isGrey && brightness > 180) return false;
+
+    // Filter out medium grey pixels (dividers, grid lines)
+    if (isGrey && brightness > 100 && brightness < 200) return false;
+
+    // Get saturation for color check
     const { s } = this.rgbToHsl(r, g, b);
-    const hasColor = s > this.SATURATION_THRESHOLD;
-    const isDark = brightness < 100; // Dark blocks are valid events
 
-    return !isWhite && !isLightGrey && (hasColor || isDark);
+    // Accept if pixel has enough color saturation
+    if (s > this.SATURATION_THRESHOLD) return true;
+
+    // Accept dark pixels (dark events/blocks)
+    if (brightness < 80) return true;
+
+    return false;
   }
 
   /**
@@ -312,7 +321,7 @@ export class CalendarAnalyzer {
       queue.push([x + step, y], [x - step, y], [x, y + step], [x, y - step]);
     }
 
-    if (pixelCount < 10) return null; // Too small (lowered to catch thin events)
+    if (pixelCount < 30) return null; // Too small - filter noise
 
     return {
       x: minX,
@@ -342,13 +351,19 @@ export class CalendarAnalyzer {
   private isValidBlockSize(rect: Rect): boolean {
     const widthRatio = rect.width / this.width;
     const heightRatio = rect.height / this.height;
+    const aspectRatio = rect.width / rect.height;
 
-    return (
-      widthRatio >= this.MIN_BLOCK_WIDTH_RATIO &&
-      widthRatio <= this.MAX_BLOCK_WIDTH_RATIO &&
-      heightRatio >= this.MIN_BLOCK_HEIGHT_RATIO &&
-      heightRatio <= this.MAX_BLOCK_HEIGHT_RATIO
-    );
+    // Check size constraints
+    const validWidth = widthRatio >= this.MIN_BLOCK_WIDTH_RATIO &&
+                       widthRatio <= this.MAX_BLOCK_WIDTH_RATIO;
+    const validHeight = heightRatio >= this.MIN_BLOCK_HEIGHT_RATIO &&
+                        heightRatio <= this.MAX_BLOCK_HEIGHT_RATIO;
+
+    // Check aspect ratio to filter out lines (grid lines, dividers)
+    const validAspect = aspectRatio >= this.MIN_ASPECT_RATIO &&
+                        aspectRatio <= this.MAX_ASPECT_RATIO;
+
+    return validWidth && validHeight && validAspect;
   }
 
   /**

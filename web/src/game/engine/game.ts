@@ -266,6 +266,9 @@ export class BreakoutGame {
     const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1); // Cap at 100ms
     this.lastTime = currentTime;
 
+    // Always update paddle position (allows movement before game starts)
+    this.updatePaddleOnly(deltaTime);
+
     if (this.state.status === "playing") {
       this.update(deltaTime);
     }
@@ -274,6 +277,22 @@ export class BreakoutGame {
 
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
+
+  /**
+   * Update paddle position only (used in idle/paused states)
+   */
+  private updatePaddleOnly(deltaTime: number): void {
+    // Handle keyboard input for paddle
+    this.handleKeyboardInput(deltaTime);
+
+    // Update paddle position
+    updatePaddle(this.paddle, this.inputX, this.config.width, deltaTime);
+
+    // Ball follows paddle when not launched
+    if (!this.ball.isLaunched) {
+      resetBallToPaddle(this.ball, this.paddle);
+    }
+  }
 
   /**
    * Update game state

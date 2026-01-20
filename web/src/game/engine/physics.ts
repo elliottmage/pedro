@@ -210,25 +210,19 @@ export function updateBall(ball: Ball, deltaTime: number): void {
 
 /**
  * Update paddle position with bounds checking
+ * Paddle follows mouse/touch instantly for responsive controls
  */
 export function updatePaddle(
   paddle: Paddle,
   targetX: number,
   canvasWidth: number,
-  deltaTime: number
+  _deltaTime: number
 ): void {
   // Calculate desired position (centered on target)
   const desiredX = targetX - paddle.width / 2;
 
-  // Move towards target
-  const diff = desiredX - paddle.x;
-  const maxMove = paddle.speed * deltaTime;
-
-  if (Math.abs(diff) < maxMove) {
-    paddle.x = desiredX;
-  } else {
-    paddle.x += Math.sign(diff) * maxMove;
-  }
+  // Instant follow - paddle moves directly to target position
+  paddle.x = desiredX;
 
   // Clamp to bounds
   paddle.x = Math.max(0, Math.min(canvasWidth - paddle.width, paddle.x));
