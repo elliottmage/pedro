@@ -124,16 +124,13 @@ export class GameRenderer {
     ctx.translate(this.screenShake.offsetX, this.screenShake.offsetY);
 
     // Clear canvas
-    ctx.fillStyle = "#0a0a1a";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(-10, -10, width + 20, height + 20);
 
-    // Layer 0: Background
-    this.renderBackground();
+    // Layer 0: Clean background (calendar with ALL events erased)
+    this.renderCleanBackground(blocks);
 
-    // Layer 0.5: Mask destroyed blocks (hide calendar events that were smashed)
-    this.renderDestroyedBlockMasks(blocks);
-
-    // Layer 1: Blocks
+    // Layer 1: Active blocks (copies of calendar events from original image)
     this.renderBlocks(blocks);
 
     // Layer 2: Paddle + Ball
@@ -151,41 +148,27 @@ export class GameRenderer {
   }
 
   /**
-   * Render background (Layer 0)
+   * Render clean background - calendar with all event areas filled white
    */
-  private renderBackground(): void {
+  private renderCleanBackground(blocks: GameBlock[]): void {
     const ctx = this.ctx;
     const { width, height } = this.config;
 
     if (this.backgroundImage) {
-      // Draw the calendar screenshot
-      ctx.globalAlpha = 0.9; // Slightly dim for better contrast
+      // Draw the full calendar screenshot
       ctx.drawImage(this.backgroundImage, 0, 0, width, height);
-      ctx.globalAlpha = 1;
 
-      // Add slight vignette effect
-      const gradient = ctx.createRadialGradient(
-        width / 2,
-        height / 2,
-        height * 0.3,
-        width / 2,
-        height / 2,
-        height * 0.8
-      );
-      gradient.addColorStop(0, "transparent");
-      gradient.addColorStop(1, "rgba(0, 0, 0, 0.3)");
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
+      // Erase ALL event areas with white to create a "clean" calendar
+      ctx.fillStyle = "#ffffff";
+      for (const block of blocks) {
+        ctx.fillRect(block.x, block.y, block.width, block.height);
+      }
     } else {
-      // Fallback gradient background
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, "#1a1a2e");
-      gradient.addColorStop(1, "#16213e");
-      ctx.fillStyle = gradient;
+      // Fallback: white background with grid
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, width, height);
 
-      // Grid pattern
-      ctx.strokeStyle = "#ffffff08";
+      ctx.strokeStyle = "#e0e0e0";
       ctx.lineWidth = 1;
       for (let x = 0; x < width; x += width / 7) {
         ctx.beginPath();
@@ -198,26 +181,6 @@ export class GameRenderer {
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
         ctx.stroke();
-      }
-    }
-  }
-
-  /**
-   * Render masks over destroyed blocks to hide background calendar events
-   */
-  private renderDestroyedBlockMasks(blocks: GameBlock[]): void {
-    const ctx = this.ctx;
-
-    for (const block of blocks) {
-      if (block.isDestroyed) {
-        // Draw white/light rectangle to show calendar background
-        ctx.fillStyle = "#ffffff"; // Calendar background is typically white
-        ctx.fillRect(
-          block.x - 2,
-          block.y - 2,
-          block.width + 4,
-          block.height + 4
-        );
       }
     }
   }
@@ -243,69 +206,38 @@ export class GameRenderer {
   }
 
   /**
-   * Render a single block showing the actual calendar content
+   * Render a single block - copy of the calendar event from original image
    */
   private renderBlock(block: GameBlock): void {
     const ctx = this.ctx;
-    const { x, y, width, height, color } = block;
+    const { x, y, width, height } = block;
+
+    if (!this.backgroundImage) return;
 
     ctx.save();
 
-    // Glow effect
-    if (this.config.enableGlow) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-    }
+    // Calculate source coordinates from the original image
+    const scaleX = this.backgroundImage.width / this.config.width;
+    const scaleY = this.backgroundImage.height / this.config.height;
 
-    // Draw the actual calendar image portion as the block content
-    if (this.backgroundImage) {
-      // Calculate source coordinates from the original image
-      const scaleX = this.backgroundImage.width / this.config.width;
-      const scaleY = this.backgroundImage.height / this.config.height;
+    const srcX = x * scaleX;
+    const srcY = y * scaleY;
+    const srcW = width * scaleX;
+    const srcH = height * scaleY;
 
-      const srcX = x * scaleX;
-      const srcY = y * scaleY;
-      const srcW = width * scaleX;
-      const srcH = height * scaleY;
+    // Draw the exact portion of the original calendar image (the event)
+    ctx.drawImage(
+      this.backgroundImage,
+      srcX, srcY, srcW, srcH,  // Source rectangle from original
+      x, y, width, height      // Destination on canvas
+    );
 
-      // Clip to rounded rectangle
-      ctx.beginPath();
-      this.roundRect(x, y, width, height, 4);
-      ctx.clip();
-
-      // Draw the portion of the background image
-      ctx.drawImage(
-        this.backgroundImage,
-        srcX, srcY, srcW, srcH,  // Source rectangle
-        x, y, width, height      // Destination rectangle
-      );
-
-      ctx.restore();
-      ctx.save();
-    }
-
-    // Health indicator (darker overlay for damaged blocks)
+    // If damaged, show slight darkening
     if (block.health < block.maxHealth) {
       const damageRatio = 1 - block.health / block.maxHealth;
-      ctx.fillStyle = `rgba(0, 0, 0, ${damageRatio * 0.4})`;
-      ctx.beginPath();
-      this.roundRect(x, y, width, height, 4);
-      ctx.fill();
-
-      // Crack effect for damaged blocks
-      this.renderCracks(block, damageRatio);
+      ctx.fillStyle = `rgba(0, 0, 0, ${damageRatio * 0.3})`;
+      ctx.fillRect(x, y, width, height);
     }
-
-    // Neon border for interactivity feedback
-    if (this.config.enableGlow) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-    }
-    ctx.strokeStyle = this.lightenColor(color, 60);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    this.roundRect(x, y, width, height, 4);
-    ctx.stroke();
 
     ctx.restore();
   }
