@@ -30,7 +30,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   // Ball
   ballRadius: 10,
   ballSpeed: 400,
-  ballColor: "#ffffff",
+  ballColor: "#bf00ff", // Neon violet
   ballSpeedIncrease: 10,
 
   // Game

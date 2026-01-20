@@ -59,12 +59,14 @@ export class CalendarAnalyzer {
   private enableOCR: boolean;
 
   // Configuration
-  private readonly MIN_BLOCK_WIDTH_RATIO = 0.02;
-  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.008;
+  private readonly MIN_BLOCK_WIDTH_RATIO = 0.015; // Slightly smaller min width
+  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.004; // Much smaller min height to catch thin events
   private readonly MAX_BLOCK_WIDTH_RATIO = 0.5;
   private readonly MAX_BLOCK_HEIGHT_RATIO = 0.3;
-  private readonly SATURATION_THRESHOLD = 15;
-  private readonly BRIGHTNESS_THRESHOLD = 240;
+  private readonly SATURATION_THRESHOLD = 10; // Lower threshold to catch more colored blocks
+  private readonly BRIGHTNESS_THRESHOLD = 235; // Lower to catch slightly colored blocks
+  private readonly GREY_THRESHOLD = 20; // Max difference between R,G,B to be considered grey
+  private readonly HEADER_RATIO = 0.08; // Top 8% is header/dates area - skip it
 
   constructor(enableOCR: boolean = false) {
     this.canvas = document.createElement("canvas");
@@ -173,8 +175,11 @@ export class CalendarAnalyzer {
     const visited = new Set<string>();
     const data = this.imageData.data;
 
-    // Scan the image for colored regions
-    for (let y = 0; y < this.height; y += 2) {
+    // Skip the header area (dates at the top)
+    const startY = Math.floor(this.height * this.HEADER_RATIO);
+
+    // Scan the image for colored regions (skip header)
+    for (let y = startY; y < this.height; y += 2) {
       for (let x = 0; x < this.width; x += 2) {
         const key = `${x},${y}`;
         if (visited.has(key)) continue;
@@ -211,20 +216,35 @@ export class CalendarAnalyzer {
 
   /**
    * Check if a pixel is part of a colored block (not background)
+   * A colored block is: any rectangle with color that is NOT:
+   * - A grey calendar grid line
+   * - A white/near-white area
    */
   private isColoredPixel(r: number, g: number, b: number): boolean {
-    // Convert to HSL for better color analysis
-    const { h, s, l } = this.rgbToHsl(r, g, b);
+    // Check if pixel is grey (calendar grid lines have R ≈ G ≈ B)
+    const maxDiff = Math.max(
+      Math.abs(r - g),
+      Math.abs(g - b),
+      Math.abs(r - b)
+    );
+    const isGrey = maxDiff < this.GREY_THRESHOLD;
 
-    // Check if pixel has enough saturation (colored) or is dark enough
-    const isSaturated = s > this.SATURATION_THRESHOLD;
-    const isNotWhite = l < 95;
-    const isNotNearWhite =
-      !(r > this.BRIGHTNESS_THRESHOLD &&
-        g > this.BRIGHTNESS_THRESHOLD &&
-        b > this.BRIGHTNESS_THRESHOLD);
+    // Check if pixel is too bright (white/near-white background)
+    const brightness = (r + g + b) / 3;
+    const isWhite = brightness > this.BRIGHTNESS_THRESHOLD;
 
-    return (isSaturated || !isNotWhite) && isNotNearWhite;
+    // Check if pixel is very light grey (calendar background)
+    const isLightGrey = isGrey && brightness > 200;
+
+    // A colored pixel is one that:
+    // - Is NOT white/near-white
+    // - Is NOT a grey line (unless it's dark grey, which could be an event)
+    // - Has some color (not purely grey) OR is dark enough to be an event
+    const { s } = this.rgbToHsl(r, g, b);
+    const hasColor = s > this.SATURATION_THRESHOLD;
+    const isDark = brightness < 100; // Dark blocks are valid events
+
+    return !isWhite && !isLightGrey && (hasColor || isDark);
   }
 
   /**
@@ -292,7 +312,7 @@ export class CalendarAnalyzer {
       queue.push([x + step, y], [x - step, y], [x, y + step], [x, y - step]);
     }
 
-    if (pixelCount < 20) return null; // Too small
+    if (pixelCount < 10) return null; // Too small (lowered to catch thin events)
 
     return {
       x: minX,
