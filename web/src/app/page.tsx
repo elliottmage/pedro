@@ -38,16 +38,23 @@ export default function Home() {
     setIsProcessing(true);
 
     try {
+      console.log("[Page] Starting analysis for file:", file.name, file.type, file.size);
+
       const { analyzeCalendar } = await import("@/lib/analysis/calendar-analyzer");
       const { generateLevel } = await import("@/game/engine/level-generator");
 
+      console.log("[Page] Modules loaded, analyzing...");
       const analysis = await analyzeCalendar(file, false);
+      console.log("[Page] Analysis complete, events:", analysis.events.length);
+
       const level = generateLevel(analysis);
+      console.log("[Page] Level generated, blocks:", level.blocks.length);
 
       setLevelData(level);
     } catch (error) {
       console.error("Error processing calendar:", error);
-      alert("Failed to process calendar image. Please try another screenshot.");
+      const msg = error instanceof Error ? error.message : String(error);
+      alert(`Error: ${msg}`);
     } finally {
       setIsProcessing(false);
     }

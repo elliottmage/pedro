@@ -142,15 +142,26 @@ export class CalendarAnalyzer {
   private loadImage(source: string | File | Blob): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      // Don't set crossOrigin for local files/blobs
+      if (typeof source === "string" && source.startsWith("http")) {
+        img.crossOrigin = "anonymous";
+      }
 
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Failed to load image"));
+      img.onload = () => {
+        console.log("[loadImage] Image loaded successfully:", img.width, "x", img.height);
+        resolve(img);
+      };
+      img.onerror = (e) => {
+        console.error("[loadImage] Failed to load image:", e);
+        reject(new Error("Failed to load image"));
+      };
 
       if (typeof source === "string") {
         img.src = source;
       } else {
-        img.src = URL.createObjectURL(source);
+        const url = URL.createObjectURL(source);
+        console.log("[loadImage] Created blob URL:", url);
+        img.src = url;
       }
     });
   }
