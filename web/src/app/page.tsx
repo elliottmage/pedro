@@ -48,10 +48,8 @@ export default function Home() {
       const analysis = await analyzeCalendar(file, false);
       setEventsCount(analysis.events.length);
 
-      const level = generateLevel(analysis, {
-        width: 800,
-        height: 600,
-      });
+      // Generate level using actual image dimensions (no forced size)
+      const level = generateLevel(analysis);
 
       setLevelData(level);
     } catch (error) {

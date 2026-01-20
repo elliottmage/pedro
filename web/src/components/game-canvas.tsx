@@ -34,9 +34,8 @@ export function GameCanvas({
       }
 
       // Create new game instance
+      // Note: width/height are set based on the uploaded image when level loads
       const game = new BreakoutGame(canvasRef.current!, {
-        width: 800,
-        height: 600,
         enableParticles: true,
         enableGlow: true,
         enableScreenShake: true,

@@ -104,23 +104,21 @@ export function generateLevel(
 ): LevelData {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Determine canvas size
-  // Option 1: Use analysis image dimensions
-  // Option 2: Use config dimensions
-  // We'll use a scaled version to fit reasonable game dimensions
-  const aspectRatio = analysis.imageWidth / analysis.imageHeight;
+  // Use actual image dimensions to avoid blur/stretching
+  // Scale down proportionally only if the image is too large
+  const MAX_DIMENSION = 1200; // Maximum canvas dimension
 
-  let canvasWidth = mergedConfig.width;
-  let canvasHeight = mergedConfig.height;
+  let canvasWidth = analysis.imageWidth;
+  let canvasHeight = analysis.imageHeight;
 
-  // Adjust to maintain aspect ratio
-  if (aspectRatio > canvasWidth / canvasHeight) {
-    canvasHeight = Math.round(canvasWidth / aspectRatio);
-  } else {
-    canvasWidth = Math.round(canvasHeight * aspectRatio);
+  // Scale down if too large, maintaining aspect ratio
+  if (canvasWidth > MAX_DIMENSION || canvasHeight > MAX_DIMENSION) {
+    const scale = Math.min(MAX_DIMENSION / canvasWidth, MAX_DIMENSION / canvasHeight);
+    canvasWidth = Math.round(canvasWidth * scale);
+    canvasHeight = Math.round(canvasHeight * scale);
   }
 
-  // Update config
+  // Update config with actual dimensions
   mergedConfig.width = canvasWidth;
   mergedConfig.height = canvasHeight;
 
