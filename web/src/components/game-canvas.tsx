@@ -21,7 +21,13 @@ export function GameCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Initialize game
+  // Store callbacks in refs to avoid re-initializing game on every render
+  const onGameEventRef = useRef(onGameEvent);
+  const onStateChangeRef = useRef(onStateChange);
+  onGameEventRef.current = onGameEvent;
+  onStateChangeRef.current = onStateChange;
+
+  // Initialize game (only once)
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -33,6 +39,8 @@ export function GameCanvas({
         gameRef.current.destroy();
       }
 
+      console.log("[GameCanvas] Initializing game");
+
       // Create new game instance
       // Note: width/height are set based on the uploaded image when level loads
       const game = new BreakoutGame(canvasRef.current!, {
@@ -41,10 +49,10 @@ export function GameCanvas({
         enableScreenShake: true,
       });
 
-      // Set up event listeners
+      // Set up event listeners (use refs to avoid stale closures)
       game.on("all", (event: GameEvent) => {
-        onGameEvent?.(event);
-        onStateChange?.(game.getState());
+        onGameEventRef.current?.(event);
+        onStateChangeRef.current?.(game.getState());
       });
 
       gameRef.current = game;
@@ -59,19 +67,23 @@ export function GameCanvas({
         gameRef.current = null;
       }
     };
-  }, [onGameEvent, onStateChange]);
+  }, []); // No dependencies - only run once
 
   // Load level when levelData changes
   useEffect(() => {
     if (!gameRef.current || !levelData) return;
 
+    console.log("[GameCanvas] Loading level, blocks:", levelData.blocks.length);
+
     const loadLevel = async () => {
       await gameRef.current!.loadLevel(levelData);
-      onStateChange?.(gameRef.current!.getState());
+      const state = gameRef.current!.getState();
+      console.log("[GameCanvas] Level loaded, state:", state.status, "blocksRemaining:", state.blocksRemaining);
+      onStateChange?.(state);
     };
 
     loadLevel();
-  }, [levelData, onStateChange]);
+  }, [levelData]); // Removed onStateChange from deps to prevent re-loading
 
   // Handle resize
   useEffect(() => {

@@ -137,6 +137,8 @@ export class BreakoutGame {
    * Load a level
    */
   async loadLevel(levelData: LevelData): Promise<void> {
+    console.log("[Game] loadLevel called with", levelData.blocks.length, "blocks");
+
     // Stop current game loop if running
     this.stop();
 
@@ -153,6 +155,7 @@ export class BreakoutGame {
 
     // Set up blocks
     this.blocks = levelData.blocks.map((block) => ({ ...block }));
+    console.log("[Game] Blocks loaded:", this.blocks.length, "isDestroyed counts:", this.blocks.filter(b => b.isDestroyed).length);
 
     // Reset game objects
     this.paddle = this.createPaddle();
@@ -161,6 +164,8 @@ export class BreakoutGame {
     // Update state
     this.state = this.createInitialState();
     this.state.blocksRemaining = this.blocks.filter((b) => !b.isDestroyed).length;
+
+    console.log("[Game] State after load:", this.state.status, "blocksRemaining:", this.state.blocksRemaining);
 
     // Center input
     this.inputX = this.config.width / 2;
