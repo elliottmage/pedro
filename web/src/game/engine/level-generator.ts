@@ -104,21 +104,11 @@ export function generateLevel(
 ): LevelData {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Use actual image dimensions to avoid blur/stretching
-  // Scale down proportionally only if the image is too large
-  const MAX_DIMENSION = 1200; // Maximum canvas dimension
+  // Use exact image dimensions - no scaling, no deformation
+  const canvasWidth = analysis.imageWidth;
+  const canvasHeight = analysis.imageHeight;
 
-  let canvasWidth = analysis.imageWidth;
-  let canvasHeight = analysis.imageHeight;
-
-  // Scale down if too large, maintaining aspect ratio
-  if (canvasWidth > MAX_DIMENSION || canvasHeight > MAX_DIMENSION) {
-    const scale = Math.min(MAX_DIMENSION / canvasWidth, MAX_DIMENSION / canvasHeight);
-    canvasWidth = Math.round(canvasWidth * scale);
-    canvasHeight = Math.round(canvasHeight * scale);
-  }
-
-  // Update config with actual dimensions
+  // Update config with exact image dimensions
   mergedConfig.width = canvasWidth;
   mergedConfig.height = canvasHeight;
 

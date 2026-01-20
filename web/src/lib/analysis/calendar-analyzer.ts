@@ -59,16 +59,13 @@ export class CalendarAnalyzer {
   private enableOCR: boolean;
 
   // Configuration
-  private readonly MIN_BLOCK_WIDTH_RATIO = 0.02; // Min width (about 2% of image)
-  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.008; // Min height (about 0.8% of image)
+  private readonly MIN_BLOCK_WIDTH_RATIO = 0.015; // Min width
+  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.006; // Min height (smaller to catch thin events)
   private readonly MAX_BLOCK_WIDTH_RATIO = 0.4; // Max width (40% of image)
   private readonly MAX_BLOCK_HEIGHT_RATIO = 0.25; // Max height (25% of image)
-  private readonly SATURATION_THRESHOLD = 12; // Minimum saturation for colored blocks
-  private readonly BRIGHTNESS_THRESHOLD = 230; // Max brightness (filter white)
-  private readonly GREY_THRESHOLD = 15; // Max R/G/B difference to be grey (stricter)
-  private readonly HEADER_RATIO = 0.10; // Top 10% is header/dates area - skip it
-  private readonly MIN_ASPECT_RATIO = 0.5; // Min width/height ratio (filter vertical lines)
-  private readonly MAX_ASPECT_RATIO = 20; // Max width/height ratio (filter horizontal lines)
+  private readonly HEADER_RATIO = 0.06; // Top 6% is header/dates area - skip it
+  private readonly MIN_ASPECT_RATIO = 0.3; // Min width/height ratio (filter very thin vertical lines)
+  private readonly MAX_ASPECT_RATIO = 25; // Max width/height ratio (filter very thin horizontal lines)
 
   constructor(enableOCR: boolean = false) {
     this.canvas = document.createElement("canvas");
@@ -219,41 +216,33 @@ export class CalendarAnalyzer {
   /**
    * Check if a pixel is part of a colored block (not background)
    * A colored block is: any rectangle with color that is NOT:
-   * - A grey calendar grid line
+   * - A grey calendar grid line (R ≈ G ≈ B)
    * - A white/near-white area
-   * - A very light/faded color
    */
   private isColoredPixel(r: number, g: number, b: number): boolean {
+    // Check brightness
+    const brightness = (r + g + b) / 3;
+
+    // Filter out white/near-white pixels (background)
+    if (brightness > 240) return false;
+
     // Check if pixel is grey (calendar grid lines have R ≈ G ≈ B)
     const maxDiff = Math.max(
       Math.abs(r - g),
       Math.abs(g - b),
       Math.abs(r - b)
     );
-    const isGrey = maxDiff < this.GREY_THRESHOLD;
 
-    // Check brightness
-    const brightness = (r + g + b) / 3;
+    // If RGB values are very similar, it's grey (not a colored event)
+    // But allow if it's colored (has enough difference between channels)
+    const isGrey = maxDiff < 20;
 
-    // Filter out white/near-white pixels (background)
-    if (brightness > this.BRIGHTNESS_THRESHOLD) return false;
+    // Filter out grey pixels (grid lines, borders)
+    if (isGrey) return false;
 
-    // Filter out light grey pixels (calendar grid, background)
-    if (isGrey && brightness > 180) return false;
-
-    // Filter out medium grey pixels (dividers, grid lines)
-    if (isGrey && brightness > 100 && brightness < 200) return false;
-
-    // Get saturation for color check
-    const { s } = this.rgbToHsl(r, g, b);
-
-    // Accept if pixel has enough color saturation
-    if (s > this.SATURATION_THRESHOLD) return true;
-
-    // Accept dark pixels (dark events/blocks)
-    if (brightness < 80) return true;
-
-    return false;
+    // Accept any pixel that has color (not grey, not white)
+    // Light colored blocks like cyan (#b3e5fc) have maxDiff > 20
+    return true;
   }
 
   /**
