@@ -86,6 +86,8 @@ export class CalendarAnalyzer {
     this.width = image.width;
     this.height = image.height;
 
+    console.log("[Analyzer] Image loaded:", this.width, "x", this.height);
+
     // Set canvas size
     this.canvas.width = this.width;
     this.canvas.height = this.height;
@@ -102,6 +104,7 @@ export class CalendarAnalyzer {
 
     // Detect event blocks
     let events = this.detectEvents();
+    console.log("[Analyzer] Raw events detected:", events.length);
 
     // Extract text if OCR is enabled
     if (this.enableOCR) {
@@ -112,13 +115,17 @@ export class CalendarAnalyzer {
     events = this.normalizeCoordinates(events);
 
     // Filter overlapping/duplicate events
+    const beforeFilter = events.length;
     events = this.filterEvents(events);
+    console.log("[Analyzer] After filter:", events.length, "(was", beforeFilter, ")");
 
     // Add unique IDs
     events = events.map((event, index) => ({
       ...event,
       id: `event-${index}-${Date.now()}`,
     }));
+
+    console.log("[Analyzer] Final events:", events.length);
 
     return {
       imageWidth: this.width,
@@ -177,6 +184,10 @@ export class CalendarAnalyzer {
     // Skip the header area (dates at the top)
     const startY = Math.floor(this.height * this.HEADER_RATIO);
 
+    let coloredPixelsFound = 0;
+    let rectsFound = 0;
+    let validRectsFound = 0;
+
     // Scan the image for colored regions (skip header)
     for (let y = startY; y < this.height; y += 2) {
       for (let x = 0; x < this.width; x += 2) {
@@ -190,25 +201,32 @@ export class CalendarAnalyzer {
 
         // Check if this pixel is a colored block (not background)
         if (this.isColoredPixel(r, g, b)) {
+          coloredPixelsFound++;
           // Flood fill to find block boundaries
           const rect = this.floodFillBounds(x, y, visited);
 
-          if (rect && this.isValidBlockSize(rect)) {
-            const color = this.getDominantColor(rect);
-            events.push({
-              x: rect.x,
-              y: rect.y,
-              width: rect.width,
-              height: rect.height,
-              color: this.rgbToHex(color),
-              text: "",
-              confidence: this.calculateConfidence(rect),
-              id: "",
-            });
+          if (rect) {
+            rectsFound++;
+            if (this.isValidBlockSize(rect)) {
+              validRectsFound++;
+              const color = this.getDominantColor(rect);
+              events.push({
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                color: this.rgbToHex(color),
+                text: "",
+                confidence: this.calculateConfidence(rect),
+                id: "",
+              });
+            }
           }
         }
       }
     }
+
+    console.log("[detectEvents] coloredPixels:", coloredPixelsFound, "rects:", rectsFound, "validRects:", validRectsFound);
 
     return events;
   }
