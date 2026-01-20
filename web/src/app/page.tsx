@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameCanvas } from "@/components/game-canvas";
@@ -98,21 +98,6 @@ export default function Home() {
         });
         setShowHighScore(true);
       }
-    }
-  }, []);
-
-  const handleDemoMode = useCallback(async () => {
-    setIsProcessing(true);
-
-    try {
-      const { generateDemoLevel } = await import("@/game/engine/level-generator");
-      const level = generateDemoLevel(800, 600);
-      setEventsCount(level.blocks.length);
-      setLevelData(level);
-    } catch (error) {
-      console.error("Error loading demo:", error);
-    } finally {
-      setIsProcessing(false);
     }
   }, []);
 
@@ -214,18 +199,6 @@ export default function Home() {
                   onFileSelect={handleFileSelect}
                   isProcessing={isProcessing}
                 />
-                <div className="mt-3 text-center">
-                  <span className="text-gray-500 text-sm">or</span>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full mt-3"
-                  onClick={handleDemoMode}
-                  disabled={isProcessing}
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Try Demo Mode
-                </Button>
               </CardContent>
             </Card>
 

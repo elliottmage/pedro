@@ -137,6 +137,9 @@ export class BreakoutGame {
    * Load a level
    */
   async loadLevel(levelData: LevelData): Promise<void> {
+    // Stop current game loop if running
+    this.stop();
+
     // Update config if provided
     if (levelData.config) {
       this.config = { ...this.config, ...levelData.config };
@@ -161,18 +164,27 @@ export class BreakoutGame {
 
     // Center input
     this.inputX = this.config.width / 2;
+
+    // Start render loop in idle state (shows calendar, waits for user to start)
+    this.isRunning = true;
+    this.lastTime = performance.now();
+    this.gameLoop();
   }
 
   /**
-   * Start the game
+   * Start the game (transition from idle to playing)
    */
   start(): void {
-    if (this.isRunning) return;
+    if (this.state.status === "playing") return;
 
-    this.isRunning = true;
     this.state.status = "playing";
-    this.lastTime = performance.now();
-    this.gameLoop();
+
+    // Start loop if not already running
+    if (!this.isRunning) {
+      this.isRunning = true;
+      this.lastTime = performance.now();
+      this.gameLoop();
+    }
   }
 
   /**
