@@ -130,6 +130,9 @@ export class GameRenderer {
     // Layer 0: Background
     this.renderBackground();
 
+    // Layer 0.5: Mask destroyed blocks (hide calendar events that were smashed)
+    this.renderDestroyedBlockMasks(blocks);
+
     // Layer 1: Blocks
     this.renderBlocks(blocks);
 
@@ -195,6 +198,26 @@ export class GameRenderer {
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
         ctx.stroke();
+      }
+    }
+  }
+
+  /**
+   * Render masks over destroyed blocks to hide background calendar events
+   */
+  private renderDestroyedBlockMasks(blocks: GameBlock[]): void {
+    const ctx = this.ctx;
+
+    for (const block of blocks) {
+      if (block.isDestroyed) {
+        // Draw a dark rectangle to hide the calendar event in the background
+        ctx.fillStyle = "#0a0a1a"; // Match background color
+        ctx.fillRect(
+          block.x - 2,
+          block.y - 2,
+          block.width + 4,
+          block.height + 4
+        );
       }
     }
   }
