@@ -59,13 +59,13 @@ export class CalendarAnalyzer {
   private enableOCR: boolean;
 
   // Configuration
-  private readonly MIN_BLOCK_WIDTH_RATIO = 0.015; // Min width
-  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.006; // Min height (smaller to catch thin events)
-  private readonly MAX_BLOCK_WIDTH_RATIO = 0.4; // Max width (40% of image)
-  private readonly MAX_BLOCK_HEIGHT_RATIO = 0.25; // Max height (25% of image)
-  private readonly HEADER_RATIO = 0.06; // Top 6% is header/dates area - skip it
-  private readonly MIN_ASPECT_RATIO = 0.3; // Min width/height ratio (filter very thin vertical lines)
-  private readonly MAX_ASPECT_RATIO = 25; // Max width/height ratio (filter very thin horizontal lines)
+  private readonly MIN_BLOCK_WIDTH_RATIO = 0.01; // Min width (1% of image)
+  private readonly MIN_BLOCK_HEIGHT_RATIO = 0.005; // Min height (0.5% of image)
+  private readonly MAX_BLOCK_WIDTH_RATIO = 0.5; // Max width (50% of image)
+  private readonly MAX_BLOCK_HEIGHT_RATIO = 0.4; // Max height (40% of image)
+  private readonly HEADER_RATIO = 0.05; // Top 5% is header/dates area - skip it
+  private readonly MIN_ASPECT_RATIO = 0.2; // Min width/height ratio
+  private readonly MAX_ASPECT_RATIO = 50; // Max width/height ratio
 
   constructor(enableOCR: boolean = false) {
     this.canvas = document.createElement("canvas");
@@ -224,7 +224,7 @@ export class CalendarAnalyzer {
     const brightness = (r + g + b) / 3;
 
     // Filter out white/near-white pixels (background)
-    if (brightness > 240) return false;
+    if (brightness > 250) return false;
 
     // Check if pixel is grey (calendar grid lines have R ≈ G ≈ B)
     const maxDiff = Math.max(
@@ -233,15 +233,14 @@ export class CalendarAnalyzer {
       Math.abs(r - b)
     );
 
-    // If RGB values are very similar, it's grey (not a colored event)
-    // But allow if it's colored (has enough difference between channels)
-    const isGrey = maxDiff < 20;
+    // Only filter truly grey pixels (very similar R, G, B values)
+    // Colored blocks have at least some difference between channels
+    const isGrey = maxDiff < 10;
 
     // Filter out grey pixels (grid lines, borders)
     if (isGrey) return false;
 
     // Accept any pixel that has color (not grey, not white)
-    // Light colored blocks like cyan (#b3e5fc) have maxDiff > 20
     return true;
   }
 
@@ -310,7 +309,7 @@ export class CalendarAnalyzer {
       queue.push([x + step, y], [x - step, y], [x, y + step], [x, y - step]);
     }
 
-    if (pixelCount < 30) return null; // Too small - filter noise
+    if (pixelCount < 15) return null; // Too small - filter noise
 
     return {
       x: minX,
